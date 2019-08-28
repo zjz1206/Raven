@@ -1,4 +1,4 @@
-############# Creating Unweighted weekly network
+############# Creating ten-week network
 library(dplyr)
 library(zoo)
 library(lubridate)
@@ -43,7 +43,7 @@ for(s in 1:nrow(week_df)){
   
   all_news_df<-do.call("rbind.data.frame", news_list) %>%
     filter(ny_date>min(date_vec)&ny_date<=max(date_vec)) %>% 
-    mutate(perm_story=paste(PERMNO, rp_story_id, sep = "_"), relevance = 1)
+    mutate(perm_story=paste(PERMNO, rp_story_id, sep = "_"))
   
   all_news_df<-all_news_df[order(all_news_df$relevance),]
   all_news_df<-all_news_df[!duplicated(all_news_df$perm_story),] %>% 
@@ -77,7 +77,7 @@ for(s in 1:nrow(week_df)){
     all_matrix[,i]<-temp_vec
   }
   
-  write.csv(all_matrix, paste("unweighted_weekly_network",
+  write.csv(all_matrix, paste("weekly_network",
                               "_",
                               substr(week_df$date[s], 1, 4),
                               "_",
@@ -87,7 +87,6 @@ for(s in 1:nrow(week_df)){
                               ".csv", sep = ""))
   
 }
-
 
 
 
