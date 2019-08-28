@@ -1,0 +1,110 @@
+############# Creating Unweighted weekly network
+library(dplyr)
+library(zoo)
+library(lubridate)
+
+############# Load weekly return data
+
+weekly_crsp<-read.csv("weekly_stock.csv", stringsAsFactors = FALSE)
+
+# Remove stocks with less than 2 observation
+
+temp<-weekly_crsp$PERMNO
+
+temp<-temp[duplicated(temp)]
+
+weekly_crsp<-filter(weekly_crsp, PERMNO%in%temp)
+
+######### test sample period is from 2000.02 to 2018.12
+
+week_df<-weekly_crsp %>% select(date, no_wk) %>% unique %>% filter(as.yearmon(ymd(date))>as.yearmon(ymd(20000201))) %>% 
+  mutate(date=ymd(date))
+
+week_df<-week_df[order(week_df$date),]
+
+
+for(s in 1:nrow(week_df)){
+  date_vec<-((week_df$date[s]-7):week_df$date[s]) %>% as.Date
+  date_df<-data.frame(date=date_vec, stringsAsFactors = FALSE) %>% 
+    mutate(y=substr(date, 1 ,4) %>% as.integer,
+           m=substr(date, 6, 7) %>% as.integer) %>% 
+    select(y, m) %>% unique
+  
+  
+  news_list<-list(0)
+  for(w in 1:nrow(date_df)){
+    news_list[[w]]<-read.csv(paste("D:/OneDrive - Australian National University/haohaodushuchongxinzuoren/Raven Project/Data/",
+                                   date_df$y[w],
+                                   "_",
+                                   date_df$m[w],
+                                   "cleaned.csv",
+                                   sep=""), stringsAsFactors = FALSE)
+  }
+  
+  all_news_df<-do.call("rbind.data.frame", news_list) %>%
+    filter(ny_date>min(date_vec)&ny_date<=max(date_vec)) %>% 
+    mutate(perm_story=paste(PERMNO, rp_story_id, sep = "_"), relevance = 1)
+  
+  all_news_df<-all_news_df[order(all_news_df$relevance),]
+  all_news_df<-all_news_df[!duplicated(all_news_df$perm_story),] %>% 
+    select(-perm_story) %>% mutate(one=relevance*ens/100)
+  
+  firm_vec<-unique(all_news_df$PERMNO)
+  firm_vec<-firm_vec[order(firm_vec)]
+  firm_df<-data.frame(PERMNO=firm_vec, stringsAsFactors = FALSE)
+  
+  temp_list<-list(0)
+  for(i in 1:nrow(firm_df)){
+    temp<-filter(all_news_df, PERMNO==firm_df$PERMNO[i])$rp_story_id
+    self_relevance_df<-filter(all_news_df, PERMNO==firm_df$PERMNO[i]) %>% select(rp_story_id, relevance)
+    names(self_relevance_df)[2]<-"self_relevance"
+    temp_list[[i]]<-filter(all_news_df, rp_story_id%in%temp) %>% 
+      merge(self_relevance_df, by = "rp_story_id") %>% 
+      mutate(double_one = one*self_relevance)# All news that firm i is mentioned.
+  }
+  
+  rm(temp,i) 
+  
+  all_matrix<-matrix(nrow = nrow(firm_df), ncol = nrow(firm_df),
+                     dimnames = list(firm_df$PERMNO, firm_df$PERMNO))
+  
+  for(i in 1:ncol(all_matrix)){
+    temp_df<-temp_list[[i]] %>% group_by(PERMNO) %>% 
+      summarise(no.news=sum(double_one)) %>% merge(firm_df, by="PERMNO", all = TRUE)
+    temp_df<-temp_df[order(temp_df$PERMNO),]
+    temp_vec<-temp_df$no.news #Each element i in column j represents number of times (relevance and novelty weighted) that firm i is mentioned in news about j
+    temp_vec[is.na(temp_vec)]<-0
+    all_matrix[,i]<-temp_vec
+  }
+  
+  write.csv(all_matrix, paste("unweighted_weekly_network",
+                              "_",
+                              substr(week_df$date[s], 1, 4),
+                              "_",
+                              substr(week_df$date[s], 6, 7),
+                              "_",
+                              substr(week_df$date[s], 9, 10),
+                              ".csv", sep = ""))
+  
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
